@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import * as d3 from 'd3';
 
-const CompanyBasedPetitions= ({data}) => {
+const CompanyBasedPetitions = ({ data }) => {
   // Add petition totals to each data point
   data.forEach(d => {
     d.totalPetitions = d.InitialApproval + d.InitialDenial + d.ContinuingApproval + d.ContinuingDenial;
@@ -13,9 +13,12 @@ const CompanyBasedPetitions= ({data}) => {
   const svgRef = useRef();
 
   useEffect(() => {
-    const margin = { top: 40, right: 30, bottom: 60, left: 100 };
+    const margin = { top: 40, right: 30, bottom: 100, left: 100 };
     const width = 800 - margin.left - margin.right;
     const height = 500 - margin.top - margin.bottom;
+
+    // Clear previous SVG content before rendering new chart
+    d3.select(svgRef.current).selectAll('*').remove();
 
     // Set up the SVG canvas
     const svg = d3.select(svgRef.current)
@@ -53,10 +56,9 @@ const CompanyBasedPetitions= ({data}) => {
       .attr('transform', `translate(0,${height})`)
       .call(d3.axisBottom(x))
       .selectAll('text')
-      .style('text-anchor', 'middle')
-      .style('font-size', '12px')
-      .style('transform', 'rotate(-45deg)')
-      .style('transform-origin', 'bottom center');
+      .attr('transform', 'rotate(-45)')
+      .style('text-anchor', 'end')
+      .style('font-size', '12px');
 
     // Add Y axis (petition counts)
     svg.append('g')

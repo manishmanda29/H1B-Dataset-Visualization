@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { ComposableMap, Geographies, Geography, Marker } from "react-simple-maps";
+import * as d3 from "d3";
 
 // Geo URL for US states
 const geoUrl = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
@@ -58,11 +59,12 @@ const stateAbbreviations = {
   wy: "Wyoming",
 };
 
-
 const MultiLevelMap = ({ data }) => {
   const [selectedState, setSelectedState] = useState(null);
   const [cities, setCities] = useState([]);
   const [highlightedState, setHighlightedState] = useState(null);
+  const [selectedCity, setSelectedCity] = useState(null);
+  const [companyData, setCompanyData] = useState([]);
 
   const handleStateClick = (geo) => {
     const stateName = geo.properties.name;
@@ -93,18 +95,147 @@ const MultiLevelMap = ({ data }) => {
     const sortedCities = Object.values(cityPetitions)
       .filter((city) => city.latitude && city.longitude)
       .sort((a, b) => b.total - a.total)
-      .slice(0, 5);
-
-      console.log({sortedCities})
+      .slice(0, 3);
 
     setSelectedState(stateName);
     setCities(sortedCities);
     setHighlightedState(stateName);
   };
 
+  const handleCityClick = (city) => {
+    const cityData = data.filter(
+      (item) => item.PetitionerCity.toLowerCase() === city.city.toLowerCase()
+    );
+
+    const companyPetitions = cityData.reduce((acc, curr) => {
+      const companyName = curr.EmployerName || "Unknown Company";
+      const initialApproval = parseInt(curr.InitialApproval || 0);
+      const initialDenial = parseInt(curr.InitialDenial || 0);
+      const continuingApproval = parseInt(curr.ContinuingApproval || 0);
+      const continuingDenial = parseInt(curr.ContinuingDenial || 0);
+
+      if (!acc[companyName]) {
+        acc[companyName] = {
+          company: companyName,
+          initialApproval,
+          initialDenial,
+          continuingApproval,
+          continuingDenial,
+        };
+      } else {
+        acc[companyName].initialApproval += initialApproval;
+        acc[companyName].initialDenial += initialDenial;
+        acc[companyName].continuingApproval += continuingApproval;
+        acc[companyName].continuingDenial += continuingDenial;
+      }
+
+      return acc;
+    }, {});
+
+    const sortedCompanies = Object.values(companyPetitions)
+      .sort((a, b) => (b.initialApproval + b.initialDenial) - (a.initialApproval + a.initialDenial))
+      .slice(0, 5);
+
+    setSelectedCity(city);
+    setCompanyData(sortedCompanies);
+  };
+
+  const getTextOffset = (index) => {
+    return index % 2 === 0 ? -10 : 10; // Alternate positions for text
+  };
+
+  const renderBarChart = () => {
+    const margin = { top: 20, right: 30, bottom: 50, left: 300 };
+    const width = 900 - margin.left - margin.right;
+    const height = 400 - margin.top - margin.bottom;
+    console.log(companyData)
+  
+    // Set up scales
+    const x = d3.scaleLinear()
+      .domain([0, d3.max(companyData, d => d.initialApproval + d.initialDenial + d.continuingApproval + d.continuingDenial)])
+      .range([0, width]);
+  
+    const y = d3.scaleBand()
+      .domain(companyData.map(d => d.company))
+      .range([0, height])
+      .padding(0.1);
+  
+    const color = d3.scaleOrdinal()
+      .domain(['initialApproval', 'initialDenial', 'continuingApproval', 'continuingDenial'])
+      .range(['#69b3a2', '#ff9999', '#4f81bd', '#f07c00']);  // Color mapping
+  
+    // Tooltip logic
+    const tooltip = d3.select('body').append('div')
+      .style('position', 'absolute')
+      .style('visibility', 'hidden')
+      .style('background', 'rgba(0, 0, 0, 0.75)')
+      .style('color', 'white')
+      .style('border-radius', '4px')
+      .style('padding', '8px')
+      .style('font-size', '12px');
+  
+    return (
+      <svg width={width + margin.left + margin.right} height={height + margin.top + margin.bottom}>
+        <g transform={`translate(${margin.left},${margin.top})`}>
+          {/* Bars for each company */}
+          {companyData.map((company, i) => {
+            let xOffset = 0;
+            const totalPetitions = company.initialApproval + company.initialDenial + company.continuingApproval + company.continuingDenial;
+            return (
+              <g key={i} transform={`translate(0,${y(company.company)})`}>
+                {['initialApproval', 'initialDenial', 'continuingApproval', 'continuingDenial'].map((category, index) => {
+                  const value = company[category];
+                  const colorValue = color(category);
+                  const xPosition = xOffset;
+                  xOffset += x(value);
+                  return (
+                    <g key={category}>
+                      <rect
+                        x={xPosition}
+                        y={0}
+                        width={x(value)}
+                        height={y.bandwidth()}
+                        fill={colorValue}
+                        onMouseOver={() => tooltip.style('visibility', 'visible').text(`${category}: ${value}`)}
+                        onMouseMove={(e) => tooltip.style('top', `${e.pageY + 5}px`).style('left', `${e.pageX + 5}px`)}
+                        onMouseOut={() => tooltip.style('visibility', 'hidden')}
+                      />
+                    </g>
+                  );
+                })}
+                <text x={-10} y={y.bandwidth() / 2} dy=".35em" textAnchor="end" style={{ fontSize: 12 }}>
+                  {company.company}
+                </text>
+                {/* Total petitions text at the end of the bar */}
+                <text x={xOffset + 10} y={y.bandwidth() / 2} dy=".35em" style={{ fontSize: 12, fill: "#333" }}>
+                  {totalPetitions}
+                </text>
+              </g>
+            );
+          })}
+        </g>
+  
+        {/* Legend */}
+  {/* Legend */}
+  {/* <g transform={`translate(${width - 200}, ${margin.top-50})`}>
+  <text x={0} y={-10} style={{ fontSize: 12, fontWeight: 'bold' }}>Legend:</text>
+  {['initialApproval', 'initialDenial', 'continuingApproval', 'continuingDenial'].map((category, index) => (
+    <g key={category} transform={`translate(0, ${index * 20})`}>
+      <rect width={12} height={12} fill={color(category)} />
+      <text x={20} y={12} style={{ fontSize: 12 }}>
+        {category.replace(/([A-Z])/g, ' $1').toUpperCase()}
+      </text>
+    </g>
+  ))}
+</g> */}
+      </svg>
+    );
+  };
+  
+
   return (
-    <div>
-      <ComposableMap projection="geoAlbersUsa" projectionConfig={{ scale: 1200, center: [125, 29] }}>
+    <div style={{display:'flex',flexDirection:'column',justifyContent:'center',alignItems:'center'}}>
+      <ComposableMap projection="geoAlbersUsa" projectionConfig={{center: [125, 29] }}>
         <Geographies geography={geoUrl}>
           {({ geographies }) =>
             geographies.map((geo) => (
@@ -139,32 +270,21 @@ const MultiLevelMap = ({ data }) => {
           <Marker
             key={index}
             coordinates={[city.longitude, city.latitude]}
-            onClick={() => console.log(city)}
+            onClick={() => handleCityClick(city)}
           >
-            <circle r={3} fill="green" /> {/* Reduced marker size */}
-            <text
-              textAnchor="middle"
-              y={-10} 
-              style={{ fontSize: 8, fill: "green" }} 
-            >
+            <circle r={2} fill="green" />
+            <text textAnchor="middle" y={getTextOffset(index)} style={{ fontSize: 8, fill: "green" }}>
               {city.city} ({city.total})
             </text>
           </Marker>
         ))}
       </ComposableMap>
 
-      {/* State details */}
-      {selectedState && (
+      {selectedCity && (
         <div>
-          <h3>Selected State: {selectedState}</h3>
-          <h4>Top 5 Cities by Petitions:</h4>
-          <ul>
-            {cities.map((city, index) => (
-              <li key={index}>
-                {city.city}: {city.total} petitions
-              </li>
-            ))}
-          </ul>
+          <h3>Selected City: {selectedCity.city}</h3>
+          <h4>Top 5 Companies by Petitions:</h4>
+          {renderBarChart()}
         </div>
       )}
     </div>

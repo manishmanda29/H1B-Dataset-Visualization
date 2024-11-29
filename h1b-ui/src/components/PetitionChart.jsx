@@ -6,18 +6,18 @@ const PetitionChart = ({ data }) => {
 
   useEffect(() => {
     const industryData = d3.rollup(data, v => ({
-      continuingApproval: d3.sum(v, d => +d["Continuing Approval"]),
-      continuingDenial: d3.sum(v, d => +d["Continuing Denial"]),
-      initialApproval: d3.sum(v, d => +d["Initial Approval"]),
-      initialDenial: d3.sum(v, d => +d["Initial Denial"]),
-    }), d => d["Industry (NAICS) Code"]);
+      continuingApproval: d3.sum(v, d => +d["ContinuingApproval"]),
+      continuingDenial: d3.sum(v, d => +d["ContinuingDenial"]),
+      initialApproval: d3.sum(v, d => +d["InitialApproval"]),
+      initialDenial: d3.sum(v, d => +d["InitialDenial"]),
+    }), d => d["IndustryCode"]);
 
     const processedData = Array.from(industryData, ([industry, values]) => ({
       industry,
       ...values,
     }));
 
-    const margin = { top: 20, right: 30, bottom: 150, left: 60 }; // Adjusted bottom margin
+    const margin = { top: 20, right: 30, bottom: 150, left: 60 };
     const width = 800 - margin.left - margin.right;
     const height = 500 - margin.top - margin.bottom;
 
@@ -25,7 +25,7 @@ const PetitionChart = ({ data }) => {
       .attr('width', width + margin.left + margin.right)
       .attr('height', height + margin.top + margin.bottom);
 
-    svg.selectAll('*').remove(); // Clear previous SVG elements
+    svg.selectAll('*').remove();
 
     const chart = svg.append('g')
       .attr('transform', `translate(${margin.left},${margin.top})`);
@@ -49,7 +49,7 @@ const PetitionChart = ({ data }) => {
       .selectAll('text')
       .attr('transform', 'rotate(-45)')
       .style('text-anchor', 'end')
-      .text(d => (d.length > 20 ? `${d.substring(0, 20)}...` : d)) // Truncate text dynamically
+      .text(d => (d.length > 20 ? `${d.substring(0, 20)}...` : d))
       .append('title')
       .text(d => d);
 
@@ -59,19 +59,36 @@ const PetitionChart = ({ data }) => {
       .append('g')
       .attr('transform', d => `translate(${x(d.industry)},0)`);
 
+    const colorScale = d3.scaleOrdinal(d3.schemeCategory10); 
+
+    // Tooltip div
+    const tooltip = d3.select('body').append('div')
+      .attr('class', 'tooltip')
+      .style('position', 'absolute')
+      .style('visibility', 'hidden')
+      .style('background-color', 'rgba(0, 0, 0, 0.7)')
+      .style('color', 'white')
+      .style('padding', '5px')
+      .style('border-radius', '3px')
+      .style('font-size', '12px');
+
     barGroups.append('rect')
       .attr('x', 0)
-      .attr('y', d => y(d.continuingApproval + d.continuingDenial))
+      .attr('y', d => y(d.continuingApproval + d.continuingDenial + d.initialApproval + d.initialDenial))
       .attr('width', x.bandwidth())
-      .attr('height', d => height - y(d.continuingApproval + d.continuingDenial))
-      .attr('fill', '#69b3a2');
-
-    // barGroups.append('rect')
-    //   .attr('x', 0)
-    //   .attr('y', d => y(d.continuingApproval))
-    //   .attr('width', x.bandwidth())
-    //   .attr('height', d => height - y(d.initialApproval))
-    //   .attr('fill', '#ff9999');
+      .attr('height', d => height - y(d.continuingApproval + d.continuingDenial + d.initialApproval + d.initialDenial))
+      .attr('fill', (d, i) => colorScale(i))
+      .on('mouseover', (event, d) => {
+        tooltip.style('visibility', 'visible')
+          .html(`Industry: ${d.industry}<br/>Petitions Filed: ${d.continuingApproval + d.continuingDenial + d.initialApproval + d.initialDenial}`);
+      })
+      .on('mousemove', (event) => {
+        tooltip.style('top', (event.pageY + 5) + 'px')
+          .style('left', (event.pageX + 5) + 'px');
+      })
+      .on('mouseout', () => {
+        tooltip.style('visibility', 'hidden');
+      });
 
   }, [data]);
 
